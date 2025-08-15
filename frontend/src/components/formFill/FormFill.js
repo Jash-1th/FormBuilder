@@ -2,32 +2,10 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import axios from "axios";
-
-function TestCompleted() {
-  return (
-    <div style={{ minHeight: "80vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ display: "flex", alignItems: "center" }}>
-        <svg height="80" width="80" viewBox="0 0 48 48" style={{ marginRight: 28 }}>
-          <circle cx="24" cy="24" r="24" fill="#4caf50" />
-          <polyline
-            points="13,26 21,34 35,16"
-            fill="none"
-            stroke="#fff"
-            strokeWidth="4"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <div>
-          <div style={{ fontSize: 38, fontWeight: 700, color: "#232323" }}>Test Completed</div>
-          <div style={{ fontSize: 20, marginTop: 6, color: "#555", maxWidth: 500, lineHeight: 1.6 }}>
-            Congratulations! Your responses have been recorded.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+import SideNavigation from './SideNavigation';
+import { onCatDragEnd } from './categorizeDnd';
+import { onClozeDragEnd } from './clozeDnd';
+import TestCompleted from "./TestCompleted";
 
 // Helper function to sanitize keys for MongoDB
 const sanitizeKey = (key) => {
@@ -103,81 +81,6 @@ export default function FillForm() {
     }
     fetchForm();
   }, [formId]);
-
-  // Categorize drag and drop
-  const onCatDragEnd = (result) => {
-    if (!result.destination) return;
-    const { source, destination, draggableId } = result;
-
-    const findItemById = (items, id) => items.find(item => item.id === id);
-
-    if (source.droppableId === "unassigned") {
-      const item = findItemById(catUnassigned, draggableId);
-      if (!item) return;
-      
-      setCatUnassigned(catUnassigned.filter(it => it.id !== draggableId));
-      setCatAssignments(prev => ({
-        ...prev,
-        [destination.droppableId]: [...(prev[destination.droppableId] || []), item]
-      }));
-    } else if (destination.droppableId === "unassigned") {
-      const item = findItemById(catAssignments[source.droppableId], draggableId);
-      if (!item) return;
-      
-      setCatAssignments(prev => ({
-        ...prev,
-        [source.droppableId]: prev[source.droppableId].filter(it => it.id !== draggableId)
-      }));
-      setCatUnassigned(prev => [...prev, item]);
-    } else if (source.droppableId !== destination.droppableId) {
-      const item = findItemById(catAssignments[source.droppableId], draggableId);
-      if (!item) return;
-      
-      setCatAssignments(prev => ({
-        ...prev,
-        [source.droppableId]: prev[source.droppableId].filter(it => it.id !== draggableId),
-        [destination.droppableId]: [...(prev[destination.droppableId] || []), item]
-      }));
-    }
-
-    const totalAssigned = Object.values(catAssignments).flat().length;
-    const catQ = form?.questions?.[0];
-    const allItemsAssigned = (totalAssigned + catUnassigned.length) === (catQ?.items?.length || 0) && totalAssigned > 0;
-    setAnswered(prev => [allItemsAssigned, prev[1], prev[2]]);
-  };
-
-  // Cloze drag and drop
-  const onClozeDragEnd = (result) => {
-    if (!result.destination) return;
-    const { source, destination, draggableId } = result;
-
-    let newBlanks = [...clozeBlanks];
-    let newUnfilled = [...clozeUnfilled];
-
-    const draggedWord = newUnfilled.find(w => w.id === draggableId);
-    if (!draggedWord) return;
-
-    if (source.droppableId === "cloze-unfilled" && destination.droppableId.startsWith("cloze-blank-")) {
-      const blankIdx = parseInt(destination.droppableId.replace("cloze-blank-", ""));
-      
-      if (newBlanks[blankIdx]) {
-        newUnfilled.push({ word: newBlanks[blankIdx].word, id: newBlanks[blankIdx].id });
-      }
-      
-      newBlanks[blankIdx] = draggedWord;
-      newUnfilled = newUnfilled.filter(w => w.id !== draggableId);
-    } else if (source.droppableId.startsWith("cloze-blank-") && destination.droppableId === "cloze-unfilled") {
-      const blankIdx = parseInt(source.droppableId.replace("cloze-blank-", ""));
-      if (newBlanks[blankIdx]) {
-        newUnfilled.push(newBlanks[blankIdx]);
-        newBlanks[blankIdx] = null;
-      }
-    }
-
-    setClozeBlanks(newBlanks);
-    setClozeUnfilled(newUnfilled);
-    setAnswered(prev => [prev[0], newBlanks.every(Boolean), prev[2]]);
-  };
 
   // Handle MCQ selection
   const handleMcqSelect = (qIndex, optionIndex) => {
@@ -279,7 +182,17 @@ export default function FillForm() {
             <div className="card mb-4 shadow-sm">
               <div className="card-body">
                 <h5 className="card-title">Question 1: Categorize</h5>
-                <DragDropContext onDragEnd={onCatDragEnd}>
+                <DragDropContext 
+                  onDragEnd={(result) => onCatDragEnd(
+                    result, 
+                    catUnassigned, 
+                    setCatUnassigned, 
+                    catAssignments, 
+                    setCatAssignments, 
+                    setAnswered, 
+                    form
+                  )}
+                >
                   <div className="mb-3">
                     <small className="text-muted">Drag items to categories</small>
                     <Droppable droppableId="unassigned" direction="horizontal">
@@ -354,7 +267,16 @@ export default function FillForm() {
             <div className="card mb-4 shadow-sm">
               <div className="card-body">
                 <h5 className="card-title">Question 2: Fill in the Blanks</h5>
-                <DragDropContext onDragEnd={onClozeDragEnd}>
+                <DragDropContext 
+                  onDragEnd={(result) => onClozeDragEnd(
+                    result,
+                    clozeBlanks,
+                    setClozeBlanks,
+                    clozeUnfilled,
+                    setClozeUnfilled,
+                    setAnswered
+                  )}
+                >
                   <div className="mb-3">
                     <small className="text-muted">Drag words to fill the blanks</small>
                     <Droppable droppableId="cloze-unfilled" direction="horizontal">
@@ -484,62 +406,17 @@ export default function FillForm() {
 
           {/* Sidebar Navigation */}
           <div className="col-lg-4">
-            <div className="card shadow-sm sticky-top" style={{ top: "20px" }}>
-              <div className="card-body">
-                <h5 className="card-title">Question Navigation</h5>
-                <div className="mb-3">
-                  <div className="d-flex justify-content-between mb-2">
-                    <span className="text-success">
-                      <strong>Answered: {answered.filter(a => a).length}</strong>
-                    </span>
-                    <span className="text-primary">
-                      <strong>Unanswered: {answered.filter(a => !a).length}</strong>
-                    </span>
-                  </div>
-                  <div className="btn-group w-100 mb-3">
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${filter === "all" ? "btn-dark" : "btn-outline-dark"}`}
-                      onClick={() => setFilter("all")}
-                    >
-                      All
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${filter === "answered" ? "btn-dark" : "btn-outline-dark"}`}
-                      onClick={() => setFilter("answered")}
-                    >
-                      Answered
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${filter === "unanswered" ? "btn-dark" : "btn-outline-dark"}`}
-                      onClick={() => setFilter("unanswered")}
-                    >
-                      Unanswered
-                    </button>
-                  </div>
-                </div>
-                <div className="d-flex flex-wrap gap-2">
-                  {filteredQuestions().map((qIndex) => (
-                    <button
-                      key={qIndex}
-                      type="button"
-                      className={`btn btn-sm ${answered[qIndex] ? "btn-success" : "btn-outline-primary"}`}
-                      style={{ width: "40px" }}
-                      onClick={() => {
-                        document.querySelectorAll('.card')[qIndex]?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'start'
-                        });
-                      }}
-                    >
-                      {qIndex + 1}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <SideNavigation 
+              answered={answered}
+              filter={filter}
+              setFilter={setFilter}
+              scrollToQuestion={(qIndex) => {
+                document.querySelectorAll('.card')[qIndex]?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start'
+                });
+              }}
+            />
           </div>
         </div>
       </form>

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { getForms } from '../api';
-import { Link, useHistory } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export default function FormList() {
   const [forms, setForms] = useState([]);
-  const history = useHistory();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchForms = async () => {
@@ -28,7 +28,7 @@ export default function FormList() {
           </li>
         ))}
       </ul>
-      <button onClick={() => history.push('/edit')}>Create New Form</button>
+      <button onClick={() => navigate('/new')}>Create New Form</button>
     </div>
   );
 }
